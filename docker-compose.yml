@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  bot:
+    build: .
+    container_name: ai-business-bot
+    env_file:
+      - .env
+    environment:
+      - MOCK_MODE=${MOCK_MODE:-true}
+    volumes:
+      - ./bot.db:/app/bot.db
+      - ./documents:/app/documents
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  api:
+    build: .
+    container_name: ai-business-api
+    command: python main.py --api
+    env_file:
+      - .env
+    environment:
+      - MOCK_MODE=${MOCK_MODE:-true}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./bot.db:/app/bot.db
+      - ./documents:/app/documents
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-business-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"

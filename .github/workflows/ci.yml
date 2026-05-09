@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -r requirements-test.txt
+
+      - name: Lint with ruff
+        run: ruff check . --ignore E501 --exclude __pycache__,.venv
+
+      - name: Test with pytest
+        run: MOCK_MODE=true python -m pytest tests/ -v --tb=short --cov=. --cov-report=term
+
+      - name: Syntax check
+        run: |
+          find . -name '*.py' \
+            -not -path './.venv/*' \
+            -not -path './__pycache__/*' \
+            -exec python3 -m py_compile {} +
+
+      - name: Check for remaining mocks in production code
+        run: |
+          count=$(grep -rE 'TODO|FIXME|NotImplementedError' --include='*.py' . \
+            | grep -v test_ | grep -v __pycache__ | wc -l)
+          echo "Remaining TODO/FIXME in prod code: $count"
+          if [ "$count" -gt 5 ]; then
+            echo "Too many TODOs/FIXMEs in production code!"
+            exit 1
+          fi
