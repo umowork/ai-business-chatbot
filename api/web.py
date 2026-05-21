@@ -152,8 +152,17 @@ class WebAPI:
         @self.app.get("/health", response_model=HealthResponse)
         async def health():
             """Health check endpoint."""
+            # Real database check
+            db_status = "ok"
+            try:
+                from sqlalchemy import text
+                async with self.db.session_factory() as session:
+                    await session.execute(text("SELECT 1"))
+            except Exception as e:
+                db_status = f"error: {e}"
+
             services_status = {
-                "database": "ok",
+                "database": db_status,
                 "llm": "mock" if self.config.mock_mode else self.config.llm_provider,
                 "crm": "mock" if self.config.mock_mode else self.config.crm_provider,
                 "rag": (
@@ -163,7 +172,7 @@ class WebAPI:
                 ),
             }
             return HealthResponse(
-                status="ok",
+                status="ok" if db_status == "ok" else "degraded",
                 version="1.0.0",
                 mock_mode=self.config.mock_mode,
                 services=services_status,
