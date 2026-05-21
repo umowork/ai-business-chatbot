@@ -20,5 +20,8 @@ COPY . .
 # Create documents directory
 RUN mkdir -p documents
 
+RUN useradd --create-home appuser
+USER appuser
+
 # Default: run Telegram bot
 CMD ["python", "main.py"]
