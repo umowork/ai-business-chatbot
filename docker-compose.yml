@@ -8,12 +8,13 @@ services:
       - .env
     environment:
       - MOCK_MODE=${MOCK_MODE:-true}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://chatbot:chatbot@postgres:5432/chatbot}
     volumes:
-      - ./bot.db:/app/bot.db
       - ./documents:/app/documents
     restart: unless-stopped
     depends_on:
       - redis
+      - postgres
 
   api:
     build: .
@@ -23,14 +24,33 @@ services:
       - .env
     environment:
       - MOCK_MODE=${MOCK_MODE:-true}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://chatbot:chatbot@postgres:5432/chatbot}
     ports:
       - "8000:8000"
     volumes:
-      - ./bot.db:/app/bot.db
       - ./documents:/app/documents
     restart: unless-stopped
     depends_on:
       - redis
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-business-postgres
+    environment:
+      POSTGRES_USER: chatbot
+      POSTGRES_PASSWORD: chatbot
+      POSTGRES_DB: chatbot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -38,3 +58,6 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+
+volumes:
+  pgdata:

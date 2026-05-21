@@ -8,10 +8,24 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Security
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from pydantic import BaseModel, Field
+
+limiter = Limiter(key_func=get_remote_address)
+
+
+def _rate_limit_exceeded_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+    )
 
 from config import Config
 from crm import CRMFactory
@@ -137,6 +151,9 @@ class WebAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+        self.app.state.limiter = limiter
+        self.app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        self.app.add_middleware(SlowAPIMiddleware)
 
     def _register_routes(self):
         """Register all API routes."""
@@ -179,6 +196,7 @@ class WebAPI:
             )
 
         @self.app.post("/chat", response_model=ChatResponse)
+        @limiter.limit("30/minute")
         async def chat(request: ChatRequest, _key: str | None = Depends(_require_api_key)):
             """Process a chat message and return AI response."""
             try:
@@ -253,19 +271,22 @@ class WebAPI:
                 logger.error("Chat API error: %s", e, exc_info=True)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Internal server error: {str(e)}",
+                    detail="Internal server error",
                 ) from e
 
         @self.app.get("/stats", response_model=StatsResponse)
+        @limiter.limit("30/minute")
         async def stats(_key: str | None = Depends(_require_api_key)):
             """Get basic statistics."""
             try:
                 s = await self.db.get_stats()
                 return StatsResponse(**s)
             except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e)) from e
+                logger.error("Stats API error: %s", e, exc_info=True)
+                raise HTTPException(status_code=500, detail="Internal server error") from e
 
         @self.app.get("/leads", response_model=list[LeadResponse])
+        @limiter.limit("30/minute")
         async def leads(
             _key: str | None = Depends(_require_api_key),
             limit: int = Query(10, ge=1, le=100),
@@ -290,13 +311,16 @@ class WebAPI:
                     for lead in lead_list
                 ]
             except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e)) from e
+                logger.error("Leads API error: %s", e, exc_info=True)
+                raise HTTPException(status_code=500, detail="Internal server error") from e
 
         @self.app.post("/reindex")
+        @limiter.limit("30/minute")
         async def reindex(_key: str | None = Depends(_require_api_key)):
             """Force re-index RAG documents."""
             try:
                 await self.rag.initialize(force_reload=True)
                 return {"status": "ok", "message": "RAG index rebuilt"}
             except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e)) from e
+                logger.error("Reindex API error: %s", e, exc_info=True)
+                raise HTTPException(status_code=500, detail="Internal server error") from e

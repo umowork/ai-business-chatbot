@@ -50,3 +50,8 @@ jobs:
             echo "Too many TODOs/FIXMEs in production code!"
             exit 1
           fi
+
+      - name: Audit dependencies for vulnerabilities
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt

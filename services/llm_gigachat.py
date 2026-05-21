@@ -4,6 +4,7 @@ Uses lazy imports for the gigachat SDK.
 """
 
 import logging
+import os
 import time
 
 from services.llm import (
@@ -22,10 +23,11 @@ class GigaChatProvider(BaseLLMProvider):
         """Lazy import to avoid errors when SDK not installed."""
         from gigachat import GigaChat
 
+        verify_ssl = os.getenv("GIGACHAT_VERIFY_SSL", "true").lower() in ("1", "true", "yes")
         return GigaChat(
             credentials=self.config.gigachat_credentials,
             model=self.config.gigachat_model,
-            verify_ssl_certs=False,
+            verify_ssl_certs=verify_ssl,
         )
 
     def _convert_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
