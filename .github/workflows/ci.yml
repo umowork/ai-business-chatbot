@@ -32,7 +32,7 @@ jobs:
         run: ruff check . --ignore E501 --exclude __pycache__,.venv
 
       - name: Test with pytest
-        run: MOCK_MODE=true python -m pytest tests/ -v --tb=short --cov=. --cov-report=term
+        run: MOCK_MODE=true python -m pytest tests/ -v --tb=short --cov=. --cov-report=term-missing --cov-fail-under=70
 
       - name: Syntax check
         run: |
@@ -50,6 +50,9 @@ jobs:
             echo "Too many TODOs/FIXMEs in production code!"
             exit 1
           fi
+
+      - name: SAST (semgrep)
+        run: semgrep --config p/python --config p/owasp-top-ten --error .
 
       - name: Audit dependencies for vulnerabilities
         run: |
